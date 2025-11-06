@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Raumklimaüberwachung</title>
+  <link rel="stylesheet" type="text/css" href="IOT.css">
+</head>
+<body>
+<header>Raumklimaüberwachung</header>
+<div id="status">Verbinde mit WebSocket…</div>
+<main>
+  <div id="data-container">
+    <div class="data-box">
+      <h2>Temperatur</h2>
+      <div id="temp" class="value">– °C</div>
+    </div>
+    <div class="data-box">
+      <h2>Feuchtigkeit</h2>
+      <div id="hum" class="value">– %</div>
+    </div>
+  </div>
+  <div id="notif-box">
+    <h2>Benachrichtigungen</h2>
+    <div class="notif-line" id="notif-temp">Temperatur: –</div>
+    <div id="suggest-temp"></div>
+    <div style="margin: 20px 0;"></div>
+    <div class="notif-line" id="notif-hum">Feuchtigkeit: –</div>
+    <div id="suggest-hum"></div>
+  </div>
+</main>
+
+<script>
+  // WebSocket-URL ggf. anpassen
+  const WS_URL = `wss://informatik.hs-bremerhaven.de/docker-sausubedi-websocket/`;
+  let socket;
+
+  function initWebSocket() {
+    socket = new WebSocket(WS_URL);
+
+    socket.onopen = () => {
+      document.getElementById('status').innerText = "WebSocket verbunden.";
+    };
+
+    socket.onclose = () => {
+      document.getElementById('status').innerText = "WebSocket getrennt. Versuche erneut zu verbinden...";
+      setTimeout(initWebSocket, 2000);
+    };
+
+    socket.onerror = (err) => {
+      console.error("WebSocket Fehler:", err);
+      document.getElementById('status').innerHTML =
+        `<span style="color:red;">WebSocket Fehler. Überprüfen Sie die Verbindung.</span>`;
+    };
+
+    socket.onmessage = async (event) => {
+      try {
+        let textData;
+
+        // Blob in Text umwandeln, falls nötig
+        if (event.data instanceof Blob) {
+          textData = await event.data.text();
+        } else {
+          textData = event.data;
+        }
+
+        const data = JSON.parse(textData);
+        const temp = data.temp;
+        const hum = data.hum;
+
+        if (typeof temp === 'number') {
+          document.getElementById('temp').innerText = `${temp.toFixed(1)} °C`;
+        }
+        if (typeof hum === 'number') {
+          document.getElementById('hum').innerText = `${hum.toFixed(1)} %`;
+        }
+
+        updateNotifications(temp, hum);
+      } catch (e) {
+        console.error("Fehler beim Verarbeiten der Nachricht:", e);
+      }
+    };
+  }
+
+  function updateNotifications(temp, hum) {
+    const notifTempEl = document.getElementById('notif-temp');
+    const suggestTempEl = document.getElementById('suggest-temp');
+    const notifHumEl = document.getElementById('notif-hum');
+    const suggestHumEl = document.getElementById('suggest-hum');
+
+    // Temperatur-Benachrichtigungen
+    if (temp <= 15) {
+      notifTempEl.innerHTML = `Temperatur: <span class="low">Niedrig</span>`;
+      suggestTempEl.innerHTML = `
+        <span class="suggestion">• Heizung einschalten.</span><br>
+        <span class="suggestion">• Fenster geschlossen halten.</span>`;
+    } else if (temp > 15 && temp < 30) {
+      notifTempEl.innerHTML = `Temperatur: <span class="moderate">Moderat</span>`;
+      suggestTempEl.innerHTML = `
+        <span class="suggestion">• Angenehme Temperatur.</span><br>
+        <span class="suggestion">• Leichte Belüftung sicherstellen.</span>`;
+    } else {
+      notifTempEl.innerHTML = `Temperatur: <span class="high">Hoch</span>`;
+      suggestTempEl.innerHTML = `
+        <span class="suggestion">• Klimaanlage oder Ventilator einschalten.</span><br>
+        <span class="suggestion">• Viel Wasser trinken.</span>`;
+    }
+
+    // Feuchtigkeits-Benachrichtigungen
+    if (hum <= 30) {
+      notifHumEl.innerHTML = `Feuchtigkeit: <span class="low">Niedrig</span>`;
+      suggestHumEl.innerHTML = `
+        <span class="suggestion">• Luftbefeuchter verwenden.</span><br>
+        <span class="suggestion">• Pflanzen aufstellen.</span>`;
+    } else if (hum > 30 && hum < 60) {
+      notifHumEl.innerHTML = `Feuchtigkeit: <span class="moderate">Moderat</span>`;
+      suggestHumEl.innerHTML = `
+        <span class="suggestion">• Optimale Luftfeuchtigkeit.</span><br>
+        <span class="suggestion">• Behalten Sie die aktuellen Lüftungseinstellungen bei.</span>`;
+    } else {
+      notifHumEl.innerHTML = `Feuchtigkeit: <span class="high">Hoch</span>`;
+      suggestHumEl.innerHTML = `
+        <span class="suggestion">• Luftentfeuchter einschalten.</span><br>
+        <span class="suggestion">• Raum regelmäßig lüften.</span>`;
+    }
+  }
+
+  window.addEventListener('load', initWebSocket);
+</script>
+</body>
+</html>
+
